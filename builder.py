@@ -22,7 +22,8 @@ class ProjectStructure:
             'logs',
             'outputs/models',
             'outputs/predictions',
-            'config'
+            'config',
+            'tests'  # 新增tests目录
         ]
         self.files = [
             'README.md',
@@ -30,14 +31,21 @@ class ProjectStructure:
             'src/train.py',
             'src/predict.py',
             'config/config.yaml',
+            'config/logging.conf',  # 新增日志配置文件
             'notebooks/EDA.ipynb',
             'src/data/__init__.py',
             'src/data/data_loader.py',
             'src/data/data_preprocessor.py',
+            'src/data/preprocess.py',  # 新增预处理模块
+            'src/data/postprocess.py',  # 新增后处理模块
             'src/models/__init__.py',
             'src/models/model.py',
             'src/utils/__init__.py',
-            'src/utils/utils.py'
+            'src/utils/utils.py',
+            'tests/__init__.py',  # 新增测试模块的__init__.py
+            'tests/test_data.py',  # 新增数据模块的测试文件
+            'tests/test_models.py',  # 新增模型模块的测试文件
+            'tests/test_utils.py'  # 新增工具模块的测试文件
         ]
         # 配置日志
         logging.basicConfig(level=logging.INFO,
