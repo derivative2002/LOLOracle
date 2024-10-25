@@ -9,13 +9,12 @@ data:
 
 # 模型参数配置
 model:
-  input_size: 30  # 将此值修改为实际特征数量
-  hidden_size: 64
+  input_size: 30            # 输入特征数（根据实际情况修改）
+  hidden_sizes: [128, 64]   # 多层隐藏层神经元数
   output_size: 2
-  learning_rate: 0.001
-  epochs: 10
-  batch_size: 128
+  learning_rate: 0.0001     # 调整学习率
+  epochs: 10                # 增加训练轮数
+  batch_size: 256           # 调整批次大小
 
 # 日志配置文件路径
 logging_config: 'config/logging.conf'
-
