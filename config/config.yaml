@@ -9,7 +9,7 @@ data:
 
 # 模型参数配置
 model:
-  input_size: 24
+  input_size: 30  # 将此值修改为实际特征数量
   hidden_size: 64
   output_size: 2
   learning_rate: 0.001

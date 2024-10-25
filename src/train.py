@@ -1,15 +1,22 @@
+import sys
+import os
+import logging
+import traceback
+
+# 日志配置
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 import paddle
 import paddle.nn.functional as F
 from paddle.io import DataLoader, TensorDataset
-import logging
 import yaml
 import numpy as np
 
 from src.data.data_loader import DataLoader as MyDataLoader
 from src.data.data_preprocessor import DataPreprocessor
 from src.models.model import SimpleClassifier, save_model
-
-logger = logging.getLogger(__name__)
 
 def train():
     """训练模型"""
@@ -23,10 +30,16 @@ def train():
     preprocessor = DataPreprocessor()
     train_data = preprocessor.preprocess(train_data)
 
+    # 采样部分数据进行测试
+    train_data = train_data.sample(n=10000, random_state=42)
+
     # 准备训练数据
     features = [col for col in train_data.columns if col not in ['id', 'win']]
     X_train = train_data[features].values.astype('float32')
     y_train = train_data['win'].values.astype('int64')
+
+    print(f"X_train shape: {X_train.shape}, dtype: {X_train.dtype}")
+    print(f"y_train shape: {y_train.shape}, dtype: {y_train.dtype}")
 
     train_dataset = TensorDataset([X_train, y_train])
     train_loader = DataLoader(train_dataset, batch_size=config['model']['batch_size'], shuffle=True)
@@ -57,5 +70,8 @@ def train():
     save_model(model, 'outputs/models/model.pdparams')
 
 if __name__ == '__main__':
-    train()
-
+    try:
+        train()
+    except Exception as e:
+        logger.error(f"训练过程中出现异常：{e}")
+        traceback.print_exc()

@@ -36,6 +36,6 @@ class DataPreprocessor:
 
         # 简单示例：归一化
         data[features] = data[features] / data[features].max()
-
+        logger.info(f"预处理后数据形状：{data.shape}")
         logger.info("数据预处理完成。")
         return data
