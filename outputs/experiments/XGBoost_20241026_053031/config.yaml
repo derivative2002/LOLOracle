@@ -23,7 +23,7 @@ tune_params: true  # 如果需要进行参数调优，设置为 true
 
 # 模型选择
 model:
-  name: 'FullyConnected'  # 可选模型：'LinearRegression'、'MLP'、'FullyConnected'、'XGBoost'、'LightGBM'
+  name: 'XGBoost'  # 可选模型：'LinearRegression'、'MLP'、'FullyConnected'、'XGBoost'、'LightGBM'
 
 # 模型参数配置
 model_params:
@@ -41,7 +41,7 @@ model_params:
   FullyConnected:
     hidden_sizes: [256, 128, 64]
     learning_rate: 0.0005
-    epochs: 70
+    epochs: 50
     batch_size: 64
 
   XGBoost:

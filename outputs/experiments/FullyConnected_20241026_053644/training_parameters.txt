@@ -1,0 +1,6 @@
+关键训练参数：
+模型名称: FullyConnected
+设备: cpu
+分布式训练: False
+训练参数: {'hidden_sizes': [256, 128, 64, 32, 16], 'learning_rate': 0.0001, 'epochs': 50, 'batch_size': 64}
+随机种子: 42

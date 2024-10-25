@@ -19,7 +19,7 @@ device: 'cpu'  # 可选 'cpu' 或 'gpu'
 distributed: false  # 如果需要分布式训练，设置为 true
 
 # 是否进行参数调优
-tune_params: true  # 如果需要进行参数调优，设置为 true
+tune_params: false  # 如果需要进行参数调优，设置为 true
 
 # 模型选择
 model:
@@ -39,9 +39,9 @@ model_params:
     hidden_sizes: [256, 128, 64, 32]
 
   FullyConnected:
-    hidden_sizes: [256, 128, 64]
-    learning_rate: 0.0005
-    epochs: 70
+    hidden_sizes: [128, 64, 32]  # 调整隐藏层大小，避免过拟合
+    learning_rate: 0.00001        # 减小学习率，稳定训练过程
+    epochs: 70                    # 增加训练轮数，给模型更多学习机会
     batch_size: 64
 
   XGBoost:

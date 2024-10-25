@@ -39,9 +39,9 @@ model_params:
     hidden_sizes: [256, 128, 64, 32]
 
   FullyConnected:
-    hidden_sizes: [256, 128, 64]
-    learning_rate: 0.0005
-    epochs: 70
+    hidden_sizes: [256, 128, 64, 32, 16]
+    learning_rate: 0.0001
+    epochs: 50
     batch_size: 64
 
   XGBoost:

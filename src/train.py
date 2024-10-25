@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from datetime import datetime
 import shutil
+from sklearn.preprocessing import StandardScaler
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
@@ -18,6 +19,9 @@ sys.path.append(project_root)
 # 设置随机种子
 from src.utils.utils import set_seed, get_device
 set_seed(42)
+
+# 日志配置
+logger = logging.getLogger(__name__)
 
 # 读取配置文件
 with open('config/config.yaml', 'r') as f:
@@ -50,32 +54,26 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger(__name__)
 
-# 复制配置文件到实验目录
-shutil.copy('config/config.yaml', os.path.join(experiment_dir, 'config.yaml'))
+# 加载数据
+from src.data.data_loader import load_data
 
-# 保存关键训练参数到文件
-training_params_file = os.path.join(experiment_dir, 'training_parameters.txt')
-with open(training_params_file, 'w') as f:
-    f.write("关键训练参数：\n")
-    f.write(f"模型名称: {model_name}\n")
-    f.write(f"设备: {device}\n")
-    f.write(f"分布式训练: {use_distributed}\n")
-    f.write(f"训练参数: {model_params}\n")
-    f.write(f"随机种子: 42\n")
+X_train, X_val, y_train, y_val = load_data(
+    config['data']['processed_train_data'],
+    train_ratio=config['data_split']['train_ratio'],
+    random_state=config['data_split']['random_state']
+)
 
-# 数据加载与预处理
-from src.data.data_loader import DataLoader as MyDataLoader
-from src.data.data_preprocessor import DataPreprocessor
+# 数据预处理：标准化
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
 
-data_loader = MyDataLoader()
-train_data, _ = data_loader.load_data()
-preprocessor = DataPreprocessor(config)
-X_train, X_val, y_train, y_val = preprocessor.preprocess(train_data, is_train=True)
-
-logger.info(f"X_train shape: {X_train.shape}, dtype: {X_train.dtype}")
-logger.info(f"y_train shape: {y_train.shape}, dtype: {y_train.dtype}")
+# 将数据转换为 Paddle Tensor
+X_train = paddle.to_tensor(X_train.astype('float32'))
+y_train = paddle.to_tensor(y_train.values.reshape(-1, 1).astype('float32'))
+X_val = paddle.to_tensor(X_val.astype('float32'))
+y_val = paddle.to_tensor(y_val.values.reshape(-1, 1).astype('float32'))
 
 # Paddle 模型的训练流程
 def train_paddle_model(model, model_save_path):
@@ -83,14 +81,8 @@ def train_paddle_model(model, model_save_path):
     batch_size = model_params.get('batch_size', 64)
 
     # 创建数据集
-    train_dataset = paddle.io.TensorDataset([
-        paddle.to_tensor(X_train.values.astype('float32')),
-        paddle.to_tensor(y_train.values.reshape(-1, 1).astype('float32'))
-    ])
-    val_dataset = paddle.io.TensorDataset([
-        paddle.to_tensor(X_val.values.astype('float32')),
-        paddle.to_tensor(y_val.values.reshape(-1, 1).astype('float32'))
-    ])
+    train_dataset = paddle.io.TensorDataset([X_train, y_train])
+    val_dataset = paddle.io.TensorDataset([X_val, y_val])
 
     # 如果使用分布式训练，初始化并行环境
     if use_distributed:
@@ -98,8 +90,7 @@ def train_paddle_model(model, model_save_path):
         logger.info("分布式训练环境已初始化")
 
     # 创建数据加载器
-    num_workers = 4  # 您可以根据实际情况调整
-    train_sampler = None
+    num_workers = 4  # 根据实际情况调整
     if use_distributed:
         # 使用分布式采样器
         train_sampler = paddle.io.DistributedBatchSampler(
@@ -128,9 +119,10 @@ def train_paddle_model(model, model_save_path):
     # 优化器
     optimizer = paddle.optimizer.Adam(parameters=model.parameters(), learning_rate=model_params['learning_rate'])
 
-    # 用于保存损失
+    # 用于保存损失和准确率
     train_losses = []
     val_losses = []
+    val_accuracies = []
 
     # 训练循环
     epochs = model_params['epochs']
@@ -140,16 +132,16 @@ def train_paddle_model(model, model_save_path):
 
         # 根据是否分布式调整进度条
         if not use_distributed or dist.get_rank() == 0:
-            progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch}/{epochs}")
+            progress_bar = tqdm(train_loader, total=len(train_loader), desc=f"Epoch {epoch}/{epochs}")
         else:
-            progress_bar = enumerate(train_loader)
+            progress_bar = train_loader
 
-        for batch_id, (x, y) in progress_bar:
-            x = x.to(device)
-            y = y.to(device)
+        for x_batch, y_batch in progress_bar:
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
 
-            y_pred = model(x)
-            loss = F.binary_cross_entropy_with_logits(y_pred, y)
+            y_pred = model(x_batch)
+            loss = F.binary_cross_entropy_with_logits(y_pred, y_batch)
             loss.backward()
             optimizer.step()
             optimizer.clear_grad()
@@ -167,6 +159,9 @@ def train_paddle_model(model, model_save_path):
 
         # 验证模型
         model.eval()
+        val_loss_total = 0
+        correct = 0
+        total = 0
         with paddle.no_grad():
             val_loader = paddle.io.DataLoader(
                 val_dataset,
@@ -174,17 +169,24 @@ def train_paddle_model(model, model_save_path):
                 shuffle=False,
                 num_workers=num_workers,
                 return_list=True)
-            val_loss_total = 0
             for x_val_batch, y_val_batch in val_loader:
                 x_val_batch = x_val_batch.to(device)
                 y_val_batch = y_val_batch.to(device)
                 y_val_pred = model(x_val_batch)
                 val_loss = F.binary_cross_entropy_with_logits(y_val_pred, y_val_batch).numpy().item()
                 val_loss_total += val_loss
+
+                # 计算准确率
+                predicted = (F.sigmoid(y_val_pred) > 0.5).astype('int32')
+                total += y_val_batch.shape[0]
+                correct += (predicted == y_val_batch.astype('int32')).sum().numpy()
+
             val_loss_avg = val_loss_total / len(val_loader)
+            val_accuracy = correct / total
             val_losses.append(val_loss_avg)
+            val_accuracies.append(val_accuracy)
             if not use_distributed or dist.get_rank() == 0:
-                logger.info(f"Validation Loss: {val_loss_avg:.4f}")
+                logger.info(f"Validation Loss: {val_loss_avg:.4f}, Accuracy: {val_accuracy:.4f}")
 
     # 保存模型（仅在主进程中）
     if not use_distributed or dist.get_rank() == 0:
@@ -192,15 +194,27 @@ def train_paddle_model(model, model_save_path):
         save_paddle_model(model, model_save_path)
         logger.info(f"模型已保存至 {model_save_path}")
 
-        # 绘制损失曲线
+        # 绘制损失和准确率曲线
         epochs_range = range(1, epochs + 1)
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(12, 5))
+
+        # 绘制损失曲线
+        plt.subplot(1, 2, 1)
         plt.plot(epochs_range, train_losses, 'b-', label='Training Loss')
         plt.plot(epochs_range, val_losses, 'r-', label='Validation Loss')
         plt.title('Training and Validation Loss')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
+
+        # 绘制准确率曲线
+        plt.subplot(1, 2, 2)
+        plt.plot(epochs_range, val_accuracies, 'g-', label='Validation Accuracy')
+        plt.title('Validation Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend()
+
         plt.tight_layout()
 
         # 保存图表到实验目录
@@ -210,9 +224,9 @@ def train_paddle_model(model, model_save_path):
         logger.info(f"训练曲线已保存至 {figure_save_path}")
 
         # 在实验目录中保存训练损失和验证损失
-        losses_save_path = os.path.join(experiment_dir, "losses.npz")
-        np.savez(losses_save_path, train_losses=train_losses, val_losses=val_losses)
-        logger.info(f"损失已保存至 {losses_save_path}")
+        losses_save_path = os.path.join(experiment_dir, "metrics.npz")
+        np.savez(losses_save_path, train_losses=train_losses, val_losses=val_losses, val_accuracies=val_accuracies)
+        logger.info(f"指标已保存至 {losses_save_path}")
 
 # 主程序
 try:
@@ -237,7 +251,7 @@ try:
         model_save_path += '.pdparams'
         train_paddle_model(model, model_save_path)
     elif model_name == 'FullyConnected':
-        hidden_sizes = model_params.get('hidden_sizes', [256, 128, 64])
+        hidden_sizes = model_params.get('hidden_sizes', [128, 64, 32])
         model = FullyConnectedModel(input_size, hidden_sizes)
         model_save_path += '.pdparams'
         train_paddle_model(model, model_save_path)
@@ -251,12 +265,12 @@ try:
             # 重新初始化模型
             model = XGBoostModel(model_params)
         # 训练模型，传入验证集以查看损失
-        model.train(X_train, y_train, X_val, y_val)
+        model.train(X_train.numpy(), y_train.numpy(), X_val.numpy(), y_val.numpy())
         model_save_path += '.joblib'
         model.save(model_save_path)
     elif model_name == 'LightGBM':
         model = LightGBMModel(model_params)
-        model.train(X_train, y_train)
+        model.train(X_train.numpy(), y_train.numpy())
         model_save_path += '.joblib'
         model.save(model_save_path)
     else:
