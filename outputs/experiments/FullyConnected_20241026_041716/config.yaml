@@ -1,0 +1,45 @@
+# 配置文件
+
+# 数据路径配置
+data:
+  train_data_path: 'data/raw/train.csv'
+  test_data_path: 'data/raw/test.csv'
+  processed_train_data: 'data/processed/processed_train.csv'
+  processed_test_data: 'data/processed/processed_test.csv'
+
+# 数据集划分比例
+data_split:
+  train_ratio: 0.8  # 训练集比例，可根据需要调整
+  random_state: 42  # 随机种子，可根据需要调整
+
+# 设备配置
+device: 'cpu'  # 可选 'cpu' 或 'gpu'
+
+# 是否使用分布式训练
+distributed: true  # 新增配置项
+
+# 模型选择
+model:
+  name: FullyConnected  # 可选模型：'LinearRegression'、'MLP'、'FullyConnected'
+
+# 模型参数配置
+model_params:
+  LinearRegression:
+    learning_rate: 0.01
+    epochs: 50
+    batch_size: 64
+
+  MLP:
+    epochs: 10
+    learning_rate: 0.0005
+    batch_size: 128
+    hidden_sizes: [256, 128, 64, 32]
+
+  FullyConnected:
+    hidden_sizes: [256, 128, 64, 32]
+    learning_rate: 0.0005
+    epochs: 30
+    batch_size: 128
+
+# 日志配置文件路径
+logging_config: 'config/logging.conf'

@@ -11,6 +11,6 @@ def set_seed(seed=42):
 def get_device(device_string):
     """获取设备"""
     if device_string.lower() == 'gpu' and paddle.is_compiled_with_cuda():
-        return paddle.CUDAPlace(0)
+        return 'gpu:0'
     else:
-        return paddle.CPUPlace()
+        return 'cpu'

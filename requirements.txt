@@ -4,4 +4,6 @@ numpy
 scikit-learn
 PyYAML
 matplotlib
-tqdm
+xgboost
+lightgbm
+joblib

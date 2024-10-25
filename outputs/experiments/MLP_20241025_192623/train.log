@@ -1,0 +1,4 @@
+INFO:src.data.data_loader:开始加载数据...
+INFO:src.data.data_loader:数据加载完成。
+INFO:__main__:X_train shape: (144000, 30), dtype: float64
+INFO:__main__:y_train shape: (144000,), dtype: float32

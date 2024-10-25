@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import yaml
@@ -10,40 +11,35 @@ def load_config(config_path):
 
 class DataPreprocessor:
     def __init__(self, config):
-        self.train_ratio = config['data_split']['train_ratio']
-        self.random_state = config['data_split'].get('random_state', 42)
+        self.config = config
         self.scaler = StandardScaler()
+        self.random_state = config['data_split']['random_state']
+        self.train_ratio = config['data_split']['train_ratio']
 
     def preprocess(self, data, is_train=True):
-        # 如果传入的是文件路径，则加载数据
-        if isinstance(data, str):
-            data = pd.read_csv(data)
-        elif isinstance(data, pd.DataFrame):
-            data = data.copy()
-        else:
-            raise ValueError("数据格式不正确，应为 DataFrame 或文件路径。")
+        data = data.copy()
 
-        # 数据清洗，处理缺失值
-        data = data.dropna()
+        # 数据清洗（根据需要添加）
 
-        # 特征与标签分离
-        X = data.drop(['id', 'win'], axis=1, errors='ignore')
+        # 特征和标签
         if 'win' in data.columns:
-            y = data['win']
+            X = data.drop(columns=['id', 'win'])
+            y = data['win'].astype('float32')  # 确保标签为 float32 类型
         else:
+            X = data.drop(columns=['id'])
             y = None
 
-        # 特征缩放
-        if is_train and y is not None:
-            X_train, X_val, y_train, y_val = train_test_split(
-                X, y, train_size=self.train_ratio, random_state=self.random_state)
-
-            X_train = self.scaler.fit_transform(X_train)
-            X_val = self.scaler.transform(X_val)
-
-            return X_train, X_val, y_train.values.astype('float32'), y_val.values.astype('float32')
+        # 特征标准化
+        if is_train:
+            X = self.scaler.fit_transform(X)
         else:
             X = self.scaler.transform(X)
+
+        if is_train:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X, y, train_size=self.train_ratio, random_state=self.random_state)
+            return X_train, X_val, y_train, y_val
+        else:
             return X
 
     def preprocess_test(self, test_data_path):
@@ -60,3 +56,4 @@ class DataPreprocessor:
         X_test = self.scaler.transform(X_test)
 
         return X_test
+
