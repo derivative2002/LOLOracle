@@ -10,7 +10,7 @@ import yaml
 
 from src.data.data_loader import DataLoader as MyDataLoader
 from src.data.data_preprocessor import DataPreprocessor
-from src.models.model import AdvancedClassifier, load_model
+from src.models.model import LinearRegressionModel, MLPModel, load_model
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +31,32 @@ def predict():
     # 数据加载与预处理
     data_loader = MyDataLoader()
     _, test_data = data_loader.load_data()
-    preprocessor = DataPreprocessor()
-    test_data = preprocessor.preprocess(test_data, is_train=False)
-
-    # 准备测试数据
-    features = [col for col in test_data.columns if col not in ['id', 'win']]
-    X_test = test_data[features].values.astype('float32')
+    preprocessor = DataPreprocessor(config)  # 传入 config 参数
+    X_test = preprocessor.preprocess(test_data, is_train=False)
 
     # 模型定义并加载
-    model = AdvancedClassifier(
-        input_size=config['model']['input_size'],
-        hidden_sizes=config['model']['hidden_sizes'],
-        output_size=config['model']['output_size']
-    )
-    load_model(model, 'outputs/models/model.pdparams')
+    model_name = config['model']['name']
+    input_size = X_test.shape[1]
+    if model_name == 'LinearRegression':
+        model = LinearRegressionModel(input_size)
+    elif model_name == 'MLP':
+        hidden_sizes = config['model_params'][model_name].get('hidden_sizes', [128, 64])
+        model = MLPModel(input_size, hidden_sizes)
+    else:
+        logger.error(f'未支持的模型类型：{model_name}')
+        return
+
+    # 加载模型参数
+    load_model(model, f'outputs/models/{model_name}_model.pdparams')
 
     # 进行预测
     model.eval()
     with paddle.no_grad():
-        outputs = model(paddle.to_tensor(X_test))
-        predictions = paddle.argmax(outputs, axis=1).numpy()
+        outputs = model(paddle.to_tensor(X_test, dtype='float32'))
+        predictions = outputs.numpy().flatten()
+
+    # 根据回归结果生成分类结果（根据阈值，比如0.5）
+    predictions = (predictions >= 0.5).astype(int)
 
     # 保存预测结果之前，检查并创建目录
     output_dir = 'outputs/predictions'

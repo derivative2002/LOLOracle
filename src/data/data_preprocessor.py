@@ -1,54 +1,62 @@
 import pandas as pd
-import logging
-import pickle  # 用于保存和加载缩放器
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import yaml
 
-logger = logging.getLogger(__name__)
+def load_config(config_path):
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+    return config
 
 class DataPreprocessor:
-    """数据预处理器"""
-
-    def __init__(self):
-        """初始化"""
-        self.label_encoder = LabelEncoder()
+    def __init__(self, config):
+        self.train_ratio = config['data_split']['train_ratio']
+        self.random_state = config['data_split'].get('random_state', 42)
         self.scaler = StandardScaler()
 
     def preprocess(self, data, is_train=True):
-        """数据预处理
-
-        Args:
-            data (pd.DataFrame): 原始数据
-            is_train (bool): 是否为训练数据
-
-        Returns:
-            pd.DataFrame: 预处理后的数据
-        """
-        logger.info("开始数据预处理...")
-        data = data.fillna(0)
-
-        # 特征列表，去掉不需要的列
-        features = [col for col in data.columns if col not in ['id', 'win']]
-
-        if is_train:
-            # 编码标签
-            data['win'] = self.label_encoder.fit_transform(data['win'])
-            # 特征标准化
-            data[features] = self.scaler.fit_transform(data[features])
-            # 保存缩放器和编码器
-            with open('outputs/models/scaler.pkl', 'wb') as f:
-                pickle.dump(self.scaler, f)
-            with open('outputs/models/label_encoder.pkl', 'wb') as f:
-                pickle.dump(self.label_encoder, f)
+        # 如果传入的是文件路径，则加载数据
+        if isinstance(data, str):
+            data = pd.read_csv(data)
+        elif isinstance(data, pd.DataFrame):
+            data = data.copy()
         else:
-            # 加载缩放器和编码器
-            with open('outputs/models/scaler.pkl', 'rb') as f:
-                self.scaler = pickle.load(f)
-            with open('outputs/models/label_encoder.pkl', 'rb') as f:
-                self.label_encoder = pickle.load(f)
-            # 特征标准化
-            data[features] = self.scaler.transform(data[features])
-            data['win'] = 0  # 占位
+            raise ValueError("数据格式不正确，应为 DataFrame 或文件路径。")
 
-        logger.info(f"预处理后数据形状：{data.shape}")
-        logger.info("数据预处理完成。")
-        return data
+        # 数据清洗，处理缺失值
+        data = data.dropna()
+
+        # 特征与标签分离
+        X = data.drop(['id', 'win'], axis=1, errors='ignore')
+        if 'win' in data.columns:
+            y = data['win']
+        else:
+            y = None
+
+        # 特征缩放
+        if is_train and y is not None:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X, y, train_size=self.train_ratio, random_state=self.random_state)
+
+            X_train = self.scaler.fit_transform(X_train)
+            X_val = self.scaler.transform(X_val)
+
+            return X_train, X_val, y_train.values.astype('float32'), y_val.values.astype('float32')
+        else:
+            X = self.scaler.transform(X)
+            return X
+
+    def preprocess_test(self, test_data_path):
+        # 加载测试数据
+        test_data = pd.read_csv(test_data_path)
+
+        # 数据清洗，处理缺失值
+        test_data = test_data.dropna()
+
+        # 特征提取
+        X_test = test_data.drop(['id', 'win'], axis=1, errors='ignore')
+
+        # 特征缩放
+        X_test = self.scaler.transform(X_test)
+
+        return X_test

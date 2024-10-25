@@ -7,14 +7,27 @@ data:
   processed_train_data: 'data/processed/processed_train.csv'
   processed_test_data: 'data/processed/processed_test.csv'
 
-# 模型参数配置
+# 数据集划分比例
+data_split:
+  train_ratio: 0.8  # 训练集比例，可根据需要调整
+  random_state: 42  # 随机种子，可根据需要调整
+
+# 模型选择
 model:
-  input_size: 30            # 输入特征数（根据实际情况修改）
-  hidden_sizes: [128, 64]   # 多层隐藏层神经元数
-  output_size: 2
-  learning_rate: 0.0001     # 调整学习率
-  epochs: 10                # 增加训练轮数
-  batch_size: 256           # 调整批次大小
+  name: 'LinearRegression'  # 可选模型：'LinearRegression'、'MLP'
+
+# 模型参数配置
+model_params:
+  LinearRegression:
+    learning_rate: 0.01
+    epochs: 50
+    batch_size: 64
+
+  MLP:
+    hidden_sizes: [128, 64]
+    learning_rate: 0.001
+    epochs: 50
+    batch_size: 64
 
 # 日志配置文件路径
 logging_config: 'config/logging.conf'

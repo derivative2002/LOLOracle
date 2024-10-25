@@ -1,5 +1,6 @@
 import unittest
 import pandas as pd
+import yaml
 from src.data.data_loader import DataLoader as MyDataLoader
 from src.data.data_preprocessor import DataPreprocessor
 
@@ -15,10 +16,13 @@ class TestData(unittest.TestCase):
     def test_data_preprocessor(self):
         loader = MyDataLoader()
         train_data, _ = loader.load_data()
-        preprocessor = DataPreprocessor()
-        processed_data = preprocessor.preprocess(train_data)
-        self.assertFalse(processed_data.isnull().values.any())
+        # 加载配置文件
+        with open('config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+        preprocessor = DataPreprocessor(config)
+        X_train, X_val, y_train, y_val = preprocessor.preprocess(train_data, is_train=True)
+        self.assertFalse(pd.isnull(X_train).any())
+        self.assertFalse(pd.isnull(X_val).any())
 
 if __name__ == '__main__':
     unittest.main()
-
