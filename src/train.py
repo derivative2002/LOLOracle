@@ -8,14 +8,20 @@ import yaml
 import numpy as np
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+from datetime import datetime
 
 # 日志配置
 os.makedirs('logs', exist_ok=True)
 
+# 动态生成日志文件名，防止覆盖
+current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+log_filename = f"logs/train_{current_time}.log"
+
 logging.basicConfig(
     level=logging.INFO,
     handlers=[
-        logging.FileHandler("logs/train.log", mode='w', encoding='utf-8'),
+        logging.FileHandler(log_filename, mode='w', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -24,8 +30,8 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 from src.data.data_loader import DataLoader as MyDataLoader
 from src.data.data_preprocessor import DataPreprocessor
-from src.models.model import LinearRegressionModel, MLPModel, save_model
-from src.utils.utils import set_seed
+from src.models.model import LinearRegressionModel, MLPModel, FullyConnectedModel, save_model
+from src.utils.utils import set_seed, get_device
 
 def train():
     """训练模型"""
@@ -35,6 +41,9 @@ def train():
     # 读取配置文件
     with open('config/config.yaml', 'r') as f:
         config = yaml.safe_load(f)
+
+    # 获取设备
+    device = get_device(config.get('device', 'cpu'))
 
     # 数据加载与预处理
     data_loader = MyDataLoader()
@@ -49,12 +58,14 @@ def train():
     model_name = config['model']['name']
     model_params = config['model_params'][model_name]
 
+    # 将模型参数记录到日志
+    logger.info(f"Model parameters: {model_params}")
+
     # 获取 batch_size
     batch_size = model_params.get('batch_size', 64)  # 如果未设置，默认64
 
     # 创建数据集和数据加载器
-    train_dataset = paddle.io.TensorDataset([paddle.to_tensor(X_train, dtype='float32'),
-                                             paddle.to_tensor(y_train.reshape(-1, 1), dtype='float32')])
+    train_dataset = paddle.io.TensorDataset([paddle.to_tensor(X_train), paddle.to_tensor(y_train.reshape(-1, 1))])
     train_loader = paddle.io.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     # 模型定义
@@ -64,9 +75,14 @@ def train():
     elif model_name == 'MLP':
         hidden_sizes = model_params.get('hidden_sizes', [128, 64])
         model = MLPModel(input_size, hidden_sizes)
+    elif model_name == 'FullyConnected':
+        hidden_sizes = model_params.get('hidden_sizes', [256, 128, 64])
+        model = FullyConnectedModel(input_size, hidden_sizes)
     else:
         logger.error(f'未支持的模型类型：{model_name}')
         return
+
+    model.to(device)
 
     # 优化器
     optimizer = paddle.optimizer.Adam(parameters=model.parameters(), learning_rate=model_params['learning_rate'])
@@ -76,19 +92,26 @@ def train():
     val_losses = []
 
     # 训练循环
-    for epoch in range(1, model_params['epochs'] + 1):
+    epochs = model_params['epochs']
+    for epoch in range(1, epochs + 1):
         model.train()
         epoch_loss = 0
-        for batch_id, (x, y) in enumerate(train_loader()):
+        progress_bar = tqdm(enumerate(train_loader()), total=len(train_loader()), desc=f"Epoch {epoch}/{epochs}")
+        for batch_id, (x, y) in progress_bar:
+            x = x.astype('float32')
+            y = y.astype('float32')
+            x = x.to(device)
+            y = y.to(device)
+
             y_pred = model(x)
             loss = F.mse_loss(y_pred, y)
             loss.backward()
             optimizer.step()
             optimizer.clear_grad()
-            epoch_loss += loss.numpy().item()
+            batch_loss = loss.numpy().item()
+            epoch_loss += batch_loss
 
-            if batch_id % 100 == 0:
-                logger.info(f"Epoch [{epoch}/{model_params['epochs']}], Step [{batch_id}], Loss: {loss.numpy().item():.4f}")
+            progress_bar.set_postfix(loss=batch_loss)
 
         avg_epoch_loss = epoch_loss / len(train_loader())
         train_losses.append(avg_epoch_loss)
@@ -97,8 +120,8 @@ def train():
         # 验证模型
         model.eval()
         with paddle.no_grad():
-            X_val_tensor = paddle.to_tensor(X_val, dtype='float32')
-            y_val_tensor = paddle.to_tensor(y_val.reshape(-1, 1), dtype='float32')
+            X_val_tensor = paddle.to_tensor(X_val.astype('float32')).to(device)
+            y_val_tensor = paddle.to_tensor(y_val.reshape(-1, 1).astype('float32')).to(device)
             y_val_pred = model(X_val_tensor)
             val_loss = F.mse_loss(y_val_pred, y_val_tensor).numpy().item()
             val_losses.append(val_loss)
@@ -106,10 +129,11 @@ def train():
 
     # 保存模型
     os.makedirs('outputs/models', exist_ok=True)
-    save_model(model, f'outputs/models/{model_name}_model.pdparams')
+    model_save_path = f'outputs/models/{model_name}_model_{current_time}.pdparams'
+    save_model(model, model_save_path)
 
     # 绘制损失曲线
-    epochs_range = range(1, model_params['epochs'] + 1)
+    epochs_range = range(1, epochs + 1)
 
     plt.figure(figsize=(8, 6))
     plt.plot(epochs_range, train_losses, 'b-', label='Training Loss')
@@ -120,9 +144,10 @@ def train():
     plt.legend()
     plt.tight_layout()
     os.makedirs('outputs/figures', exist_ok=True)
-    plt.savefig(f'outputs/figures/{model_name}_training_curves.png')
+    figure_save_path = f'outputs/figures/{model_name}_training_curves_{current_time}.png'
+    plt.savefig(figure_save_path)
     plt.close()
-    logger.info(f"训练曲线已保存至 outputs/figures/{model_name}_training_curves.png")
+    logger.info(f"训练曲线已保存至 {figure_save_path}")
 
 if __name__ == '__main__':
     try:

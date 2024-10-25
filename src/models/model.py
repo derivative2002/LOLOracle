@@ -29,22 +29,28 @@ class MLPModel(nn.Layer):
     def forward(self, x):
         return self.network(x)
 
-def save_model(model, path):
-    """保存模型
+class FullyConnectedModel(nn.Layer):
+    """全连接神经网络模型"""
+    def __init__(self, input_size, hidden_sizes):
+        super(FullyConnectedModel, self).__init__()
+        layers = []
+        in_size = input_size
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(in_size, hidden_size))
+            layers.append(nn.ReLU())
+            in_size = hidden_size
+        layers.append(nn.Linear(in_size, 1))
+        self.network = nn.Sequential(*layers)
 
-    Args:
-        model (nn.Layer): 模型
-        path (str): 保存路径
-    """
+    def forward(self, x):
+        return self.network(x)
+
+def save_model(model, path):
+    """保存模型"""
     paddle.save(model.state_dict(), path)
     logger.info(f"模型已保存至 {path}")
 
 def load_model(model, path):
-    """加载模型
-
-    Args:
-        model (nn.Layer): 模型
-        path (str): 模型路径
-    """
+    """加载模型"""
     model.set_state_dict(paddle.load(path))
     logger.info(f"模型已从 {path} 加载")

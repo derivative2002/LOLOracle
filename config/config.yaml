@@ -12,9 +12,12 @@ data_split:
   train_ratio: 0.8  # 训练集比例，可根据需要调整
   random_state: 42  # 随机种子，可根据需要调整
 
+# 设备配置
+device: 'cpu'  # 可选 'cpu' 或 'gpu'
+
 # 模型选择
 model:
-  name: 'LinearRegression'  # 可选模型：'LinearRegression'、'MLP'
+  name: 'MLP'  # 可选模型：'LinearRegression'、'MLP'、'FullyConnected'
 
 # 模型参数配置
 model_params:
@@ -26,6 +29,12 @@ model_params:
   MLP:
     hidden_sizes: [128, 64]
     learning_rate: 0.001
+    epochs: 50
+    batch_size: 64
+
+  FullyConnected:
+    hidden_sizes: [256, 128, 64]
+    learning_rate: 0.0005
     epochs: 50
     batch_size: 64
 
