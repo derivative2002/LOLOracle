@@ -16,9 +16,40 @@ def save_concatenated_result(result):
         json_string = json.dumps(result, ensure_ascii=False)
         file.write(json_string)
     print("结果已成功保存到文件。")
-        
+  
+def gen_4o_data(i, sys_prompt, query, meta="", model="claude-3-5-sonnet-20241022", is_json=False, temperature=1):
+    if "gpt" in model:
+        data = {
+            "model": model,
+            "messages": [{"role": "system", "content": sys_prompt},{"role": "user", "content": query}],
+            "stream": False,
+            "temperature": temperature,
+        }
+    elif model.startswith("o1"):
+        data = {
+            "model": model,
+            "messages": [{"role": "user", "content": query}],
+            "stream": False
+        }
+    elif model.startswith("claude"):
+        data = {
+            "model": model,
+            "messages": [{"role": "system", "content": sys_prompt},{"role": "user", "content": query}],
+            "temperature": temperature,
+            "max_tokens": 8192,
+        }
+    if is_json:
+        data["response_format"] = {"type": "json_object"}
+    return {
+        "_id": str(i),
+        "data": json.dumps(data, ensure_ascii=False),
+        "model": model,
+        "model_type": "gpt",
+        "meta": meta,
+    }      
 if __name__ == "__main__":
-    request_dict = """
+    i = "1f2b7ec9967a49df83e19d60587e52"
+    query1 = """
     {
         "model": "claude-3-5-sonnet-20241022",
         "messages": [
@@ -36,13 +67,8 @@ if __name__ == "__main__":
         "temperature": 0.001
     }
     """
-
-    json1234 = {
-                "_id": "1f2b7ec9967a49df83e19d60587e52",
-                "data": json.dumps(request_dict, ensure_ascii=False),
-                "model": "claude-3-5-sonnet-20241022",
-                "model_type": "gpt",
-            }
+    sys_prompt1 = "你是一位好莱坞电影编剧，擅长改编电影作品，接下请根据要求进行创作，我会给你原始的素材。"
+    json1234 = gen_4o_data(i, sys_prompt1, query1, meta="", model="claude-3-5-sonnet-20241022", is_json=False, temperature=-0.7)
     save_concatenated_result(json1234)
     
     cmd = [
