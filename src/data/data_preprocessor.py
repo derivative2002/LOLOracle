@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import yaml
+import joblib  # 用于保存和加载 scaler
 
 def load_config(config_path):
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -10,18 +11,25 @@ def load_config(config_path):
     return config
 
 class DataPreprocessor:
-    def __init__(self, config):
+    def __init__(self, config, is_train=True):
         self.config = config
-        self.scaler = StandardScaler()
         self.random_state = config['data_split']['random_state']
         self.train_ratio = config['data_split']['train_ratio']
+        self.is_train = is_train
+        self.scaler = None
 
-    def preprocess(self, data, is_train=True):
+        if self.is_train:
+            self.scaler = StandardScaler()
+        else:
+            # 在预测阶段，加载已保存的 scaler
+            self.scaler = joblib.load('outputs/scaler.joblib')
+
+    def preprocess(self, data):
         data = data.copy()
 
-        # 数据清洗（根据需要添加）
+        # 数据清洗（可根据需要添加）
 
-        # 特征和标签
+        # 提取特征和标签
         if 'win' in data.columns:
             X = data.drop(columns=['id', 'win'])
             y = data['win'].astype('float32')  # 确保标签为 float32 类型
@@ -30,12 +38,14 @@ class DataPreprocessor:
             y = None
 
         # 特征标准化
-        if is_train:
+        if self.is_train:
             X = self.scaler.fit_transform(X)
+            # 保存已拟合的 scaler
+            joblib.dump(self.scaler, 'outputs/scaler.joblib')
         else:
             X = self.scaler.transform(X)
 
-        if is_train:
+        if self.is_train:
             X_train, X_val, y_train, y_val = train_test_split(
                 X, y, train_size=self.train_ratio, random_state=self.random_state)
             return X_train, X_val, y_train, y_val
@@ -56,4 +66,3 @@ class DataPreprocessor:
         X_test = self.scaler.transform(X_test)
 
         return X_test
-

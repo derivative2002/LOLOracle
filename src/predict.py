@@ -42,8 +42,10 @@ def predict():
     # 数据加载与预处理
     data_loader = MyDataLoader()
     _, test_data = data_loader.load_data()
-    preprocessor = DataPreprocessor(config)
-    X_test = preprocessor.preprocess(test_data, is_train=False)
+
+    # 创建预处理器，指定 is_train=False
+    preprocessor = DataPreprocessor(config, is_train=False)
+    X_test = preprocessor.preprocess(test_data)
 
     # 模型定义并加载
     model_name = config['model']['name']
@@ -96,7 +98,7 @@ def predict():
     if model_name in ['LinearRegression', 'MLP', 'FullyConnected']:
         model.eval()
         with paddle.no_grad():
-            X_test_tensor = paddle.to_tensor(X_test.values.astype('float32')).to(device)
+            X_test_tensor = paddle.to_tensor(X_test.astype('float32')).to(device)
             outputs = model(X_test_tensor)
             predictions = (F.sigmoid(outputs) >= 0.5).astype('int64').numpy().flatten()
     elif model_name in ['XGBoost', 'LightGBM']:

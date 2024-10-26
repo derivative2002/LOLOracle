@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from datetime import datetime
 import shutil
-from sklearn.preprocessing import StandardScaler
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
@@ -56,18 +55,15 @@ logging.basicConfig(
 )
 
 # 加载数据
-from src.data.data_loader import load_data
+from src.data.data_loader import DataLoader as MyDataLoader
+from src.data.data_preprocessor import DataPreprocessor
 
-X_train, X_val, y_train, y_val = load_data(
-    config['data']['processed_train_data'],
-    train_ratio=config['data_split']['train_ratio'],
-    random_state=config['data_split']['random_state']
-)
+data_loader = MyDataLoader()
+train_data, _ = data_loader.load_data()
 
-# 数据预处理：标准化
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_val = scaler.transform(X_val)
+# 数据预处理
+preprocessor = DataPreprocessor(config, is_train=True)
+X_train, X_val, y_train, y_val = preprocessor.preprocess(train_data)
 
 # 将数据转换为 Paddle Tensor
 X_train = paddle.to_tensor(X_train.astype('float32'))
